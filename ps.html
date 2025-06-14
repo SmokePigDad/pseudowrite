@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PseudoWrite - A Personal AI Writing Assistant</title>
+    <style>
+        /* 1. Global Styles & Variables */
+        :root {
+            --bg-color: #1a1a1a;
+            --sidebar-bg: #222;
+            --editor-bg: #282828;
+            --border-color: #444;
+            --text-color: #e0e0e0;
+            --text-muted: #aaa;
+            --accent-color: #8a2be2; /* BlueViolet */
+            --accent-hover: #9932cc; /* MediumOrchid */
+            --danger-color: #dc3545;
+            --font-main: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font-main); background-color: var(--bg-color); color: var(--text-color); font-size: 14px; overflow: hidden; }
+
+        /* 2. Main App Layout */
+        #app-container { display: flex; height: 100vh; }
+        #sidebar { width: 420px; background-color: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; }
+        #sidebar-scroll-content { overflow-y: auto; flex-grow: 1; }
+        #main-content { flex-grow: 1; display: flex; flex-direction: column; }
+
+        /* 3. Sidebar Components */
+        .sidebar-section { padding: 15px; border-bottom: 1px solid var(--border-color); }
+        .sidebar-section h3 { font-size: 16px; margin-bottom: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        #project-management .project-controls { display: flex; gap: 10px; align-items: center; }
+        #project-selector { flex-grow: 1; font-size: 16px; background-color: var(--editor-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 4px; padding: 5px; }
+        .document-list, .story-bible-list { list-style: none; }
+        .document-list-item, .story-bible-list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 4px; cursor: pointer; margin-bottom: 5px; background-color: #2c2c2c; border: 1px solid var(--border-color); }
+        .document-list-item.active { background-color: var(--accent-color); border-color: var(--accent-hover); }
+        .story-bible-list-item:hover, .document-list-item:hover { background-color: #3a3a3a; }
+        .delete-item-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 0 5px; }
+        .delete-item-btn:hover { color: var(--danger-color); }
+        .document-list-item .doc-title { flex-grow: 1; }
+
+        /* Modal button container - replaces old inline style on modal footers */
+        .modal-footer {
+            margin-top: 16px;
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Story Bible Accordion */
+        .accordion-item details { border: 1px solid var(--border-color); border-radius: 4px; margin-bottom: 5px; }
+        .accordion-item summary { padding: 10px; font-weight: bold; cursor: pointer; background-color: #2c2c2c; }
+        .accordion-item .accordion-content { padding: 10px; background-color: var(--editor-bg); }
+        
+        /* 4. Main Content Components */
+        #main-toolbar { display: flex; align-items: center; padding: 10px 15px; background-color: var(--sidebar-bg); border-bottom: 1px solid var(--border-color); flex-wrap: wrap; gap: 10px; }
+        #document-title-input { font-size: 20px; font-weight: bold; background: none; border: none; color: var(--text-color); padding: 5px; flex-grow: 1; outline: none; }
+        #word-count { color: var(--text-muted); margin-left: auto; margin-right: 15px; }
+        #editor-area { flex-grow: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; }
+        #main-editor { width: 100%; height: 100%; background-color: transparent; border: none; color: var(--text-color); font-size: 16px; line-height: 1.6; resize: none; font-family: 'Georgia', serif; }
+        #main-editor:focus { outline: none; }
+        #initial-generation-area { padding: 20px; text-align: center; display: none; }
+
+        /* 5. Generic UI Elements */
+        .btn { background-color: var(--accent-color); color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background-color 0.2s; position: relative; }
+        .btn:hover { background-color: var(--accent-hover); }
+        .btn:disabled { background-color: #555; cursor: not-allowed; }
+        .btn.loading::after { content: '...'; position: absolute; right: 5px; }
+        .btn-secondary { background-color: #444; }
+        .btn-secondary:hover { background-color: #555; }
+        .btn-small { padding: 4px 8px; font-size: 12px; margin-top: 5px; }
+        .btn-icon { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; }
+        .btn-icon:hover { color: var(--text-color); }
+        .btn-danger { background-color: #a02c38; }
+        textarea, input[type="text"] { width: 100%; background-color: var(--editor-bg); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px; color: var(--text-color); font-family: var(--font-main); }
+        textarea { resize: vertical; min-height: 80px; }
+        
+        /* Dropdown for Write/Rewrite */
+        .dropdown { position: relative; display: inline-block; }
+        .dropdown-content { display: none; position: absolute; background-color: #333; min-width: 160px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); z-index: 10; border-radius: 4px; border: 1px solid var(--border-color); padding: 5px 0; }
+        .dropdown-content button { color: var(--text-color); padding: 10px 16px; text-decoration: none; display: block; background: none; border: none; width: 100%; text-align: left; cursor: pointer; }
+        .dropdown-content button:hover { background-color: #444; }
+        .dropdown-content.show { display: block; }
+
+        /* Modal Styles */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background-color: var(--sidebar-bg); padding: 20px; border-radius: 8px; width: 90%; max-width: 600px; border: 1px solid var(--border-color); max-height: 90vh; display: flex; flex-direction: column;}
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .modal-header .btn-icon { font-size: 24px; line-height: 1; }
+        .modal-body { overflow-y: auto; }
+        .rewrite-card { background-color: var(--editor-bg); padding: 15px; border-radius: 4px; margin-bottom: 10px; border: 1px solid var(--border-color); cursor: pointer; white-space: pre-wrap; }
+        .rewrite-card:hover { border-color: var(--accent-color); }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <!-- Sidebar -->
+        <aside id="sidebar">
+            <div id="sidebar-scroll-content">
+                <div class="sidebar-section" id="project-management"><div class="project-controls"><select id="project-selector"></select><button class="btn btn-small" id="new-project-btn">New</button><button class="btn-icon" id="delete-project-btn" aria-label="Delete Project">🗑️</button></div></div>
+                <div class="sidebar-section" id="document-management"><ul class="document-list" id="document-list-ul"></ul><button class="btn btn-secondary btn-small" id="new-document-btn">New Document</button></div>
+                <div class="sidebar-section" id="story-bible">
+                    <h3>Story Bible</h3>
+                    <div class="accordion-item"><details><summary>🧠 Braindump</summary><div class="accordion-content"><textarea id="sb-braindump" placeholder="A free-form braindump..."></textarea></div></details></div>
+                    <div class="accordion-item"><details><summary>🎭 Genre</summary><div class="accordion-content"><input type="text" id="sb-genre" placeholder="e.g. Fantasy, Cozy Mystery..."></div></details></div>
+                    <div class="accordion-item"><details><summary>✍️ Style</summary><div class="accordion-content"><textarea id="sb-style" placeholder="Paste a sample of writing..."></textarea></div></details></div>
+                    <div class="accordion-item"><details><summary>📜 Synopsis</summary><div class="accordion-content"><textarea id="sb-synopsis" placeholder="A summary of your story..."></textarea><button class="btn btn-secondary btn-small" id="generate-synopsis-btn">Generate Synopsis</button></div></details></div>
+                    <!-- CHARACTERS ACCORDION WITH CATEGORIZATION -->
+                    <div class="accordion-item">
+                      <details open>
+                        <summary>👥 Characters</summary>
+                        <div class="accordion-content">
+                          <details open>
+                            <summary>Protagonist</summary>
+                            <ul class="story-bible-list" id="sb-characters-protagonist"></ul>
+                          </details>
+                          <details>
+                            <summary>Antagonist</summary>
+                            <ul class="story-bible-list" id="sb-characters-antagonist"></ul>
+                          </details>
+                          <details>
+                            <summary>Supporting</summary>
+                            <ul class="story-bible-list" id="sb-characters-supporting"></ul>
+                          </details>
+                          <details>
+                            <summary>Minor</summary>
+                            <ul class="story-bible-list" id="sb-characters-minor"></ul>
+                          </details>
+                          <details>
+                            <summary>Other</summary>
+                            <ul class="story-bible-list" id="sb-characters-other"></ul>
+                          </details>
+                          <button class="btn btn-secondary btn-small" id="sb-add-character-btn">Add Character</button>
+                          <button class="btn btn-secondary btn-small" id="generate-character-btn">Generate Character</button>
+                        </div>
+                      </details>
+                    </div>
+                    <!-- WORLD-BUILDING ACCORDION WITH TYPES -->
+                    <div class="accordion-item">
+                      <details open>
+                        <summary>🌍 Worldbuilding</summary>
+                        <div class="accordion-content">
+                          <details open>
+                            <summary>Locations</summary>
+                            <ul class="story-bible-list" id="sb-worldbuilding-location"></ul>
+                          </details>
+                          <details>
+                            <summary>Factions</summary>
+                            <ul class="story-bible-list" id="sb-worldbuilding-faction"></ul>
+                          </details>
+                          <details>
+                            <summary>Magic System</summary>
+                            <ul class="story-bible-list" id="sb-worldbuilding-magicsystem"></ul>
+                          </details>
+                          <details>
+                            <summary>Technology</summary>
+                            <ul class="story-bible-list" id="sb-worldbuilding-technology"></ul>
+                          </details>
+                          <details>
+                            <summary>Species</summary>
+                            <ul class="story-bible-list" id="sb-worldbuilding-species"></ul>
+                          </details>
+                          <details>
+                            <summary>Artifact</summary>
+                            <ul class="story-bible-list" id="sb-worldbuilding-artifact"></ul>
+                          </details>
+                          <details>
+                            <summary>History</summary>
+                            <ul class="story-bible-list" id="sb-worldbuilding-history"></ul>
+                          </details>
+                          <details>
+                            <summary>Event</summary>
+                            <ul class="story-bible-list" id="sb-worldbuilding-event"></ul>
+                          </details>
+                          <details>
+                            <summary>Culture</summary>
+                            <ul class="story-bible-list" id="sb-worldbuilding-culture"></ul>
+                          </details>
+                          <details>
+                            <summary>Concept</summary>
+                            <ul class="story-bible-list" id="sb-worldbuilding-concept"></ul>
+                          </details>
+                          <details>
+                            <summary>Miscellaneous</summary>
+                            <ul class="story-bible-list" id="sb-worldbuilding-misc"></ul>
+                          </details>
+                          <button class="btn btn-secondary btn-small" id="sb-add-worldbuilding-btn">Add Element</button>
+                          <button class="btn btn-secondary btn-small" id="generate-worldbuilding-btn">Generate Element</button>
+                        </div>
+                      </details>
+                    </div>
+                    <div class="accordion-item"><details><summary>🗺️ Outline</summary><div class="accordion-content"><ul class="story-bible-list" id="sb-outline-list"></ul><button class="btn btn-secondary btn-small" id="sb-add-outline-btn">Add Beat</button><button class="btn btn-secondary btn-small" id="generate-outline-btn">Generate Outline</button></div></details></div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main id="main-content">
+            <div id="main-toolbar">
+                <input type="text" id="document-title-input" value="Chapter 1">
+                <div class="dropdown"><button class="btn dropdown-toggle" id="write-btn">Write</button><div class="dropdown-content"><button id="write-auto-btn">Auto (Continue)</button><button id="write-guided-btn">Guided...</button><button id="write-tone-shift-btn">Tone Shift...</button></div></div>
+                <button class="btn" id="rewrite-btn">Rewrite</button><button class="btn" id="describe-btn">Describe</button><button class="btn" id="brainstorm-btn">Brainstorm</button>
+                <div class="dropdown"><button class="btn btn-secondary dropdown-toggle" id="plugins-btn">Plugins</button><div class="dropdown-content"><button id="plugin-twist-btn">Generate a Twist</button><button id="plugin-scene-ender-btn">Scene Ender</button><button id="plugin-dialogue-btn">Write with More Dialogue</button><button id="plugin-visualize-btn">Visualize</button></div></div>
+                <span id="word-count">0 Words</span><button class="btn-icon" id="settings-btn" aria-label="Settings">⚙️</button>
+            </div>
+            <div id="editor-area">
+                <textarea id="main-editor" placeholder="Type here..."></textarea>
+                <div id="initial-generation-area"><button class="btn" id="generate-openings-btn">Generate 3 Openings</button></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="settings-modal" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h2>Settings</h2><button class="btn-icon" data-close-modal aria-label="Close modal">×</button></div><label for="model-name-input">LLM Model Name:</label><input type="text" id="model-name-input" value="openai-large"></div></div>
+    <div id="rewrite-modal" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h2>Rewrite Suggestions</h2><button class="btn-icon" data-close-modal aria-label="Close modal">×</button></div><div id="rewrite-cards-container" class="modal-body"></div></div></div>
+    <div id="describe-modal" class="modal-overlay"><div class="modal-content"><div class="modal-header"><h2>Describe With...</h2><button class="btn-icon" data-close-modal aria-label="Close modal">×</button></div><div class="modal-body"><div id="describe-options"></div><button class="btn" id="execute-describe-btn">Describe</button></div></div></div>
+<div id="character-detail-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Character Details</h2>
+      <button class="btn-icon" data-close-modal aria-label="Close modal">×</button>
+    </div>
+    <div class="modal-body">
+      <label for="char-detail-name">Name</label>
+      <input type="text" id="char-detail-name" placeholder="Character Name">
+
+      <label for="char-detail-role">Role</label>
+      <input type="text" id="char-detail-role" placeholder="Role (e.g. Protagonist)">
+
+      <label for="char-detail-appearance">Appearance</label>
+      <textarea id="char-detail-appearance" placeholder="Physical traits, clothing, etc."></textarea>
+
+      <label for="char-detail-personality">Personality</label>
+      <textarea id="char-detail-personality" placeholder="Describe the personality..."></textarea>
+
+      <label for="char-detail-goals">Goals</label>
+      <textarea id="char-detail-goals" placeholder="What drives them?"></textarea>
+
+      <label for="char-detail-flaws">Flaws</label>
+      <textarea id="char-detail-flaws" placeholder="Their main flaws..."></textarea>
+
+      <label for="char-detail-description">Description</label>
+      <textarea id="char-detail-description" placeholder="Freeform summary..."></textarea>
+
+      <div class="modal-footer">
+        <button class="btn" id="save-character-detail-btn">Save</button>
+        <button class="btn btn-danger" id="delete-character-detail-btn">Delete</button>
+        <button class="btn btn-secondary" id="refine-character-ai-btn">Refine w/ AI</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="worldbuilding-detail-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Worldbuilding Element Details</h2>
+      <button class="btn-icon" data-close-modal aria-label="Close modal">×</button>
+    </div>
+    <div class="modal-body">
+      <label for="world-detail-name">Name</label>
+      <input type="text" id="world-detail-name" placeholder="Element Name">
+
+      <label for="world-detail-type">Type</label>
+      <input type="text" id="world-detail-type" placeholder="e.g. Location, Magic System">
+
+      <label for="world-detail-description">Description</label>
+      <textarea id="world-detail-description" placeholder="Describe this world element..."></textarea>
+
+      <label for="world-detail-significance">Significance</label>
+      <textarea id="world-detail-significance" placeholder="Why is this important?"></textarea>
+
+      <div class="modal-footer">
+        <button class="btn" id="save-world-detail-btn">Save</button>
+        <button class="btn btn-danger" id="delete-world-detail-btn">Delete</button>
+        <button class="btn btn-secondary" id="refine-world-ai-btn">Refine w/ AI</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- CONSTANTS ---
+            const API_ENDPOINT = 'https://text.pollinations.ai/openai/v1/chat/completions';
+
+            // === Modal Open/Populate Logic ===
+
+            // Opens and populates the Character Detail Modal for editing/creating a character.
+            function openCharacterDetailModal(charId) {
+                const project = getActiveProject();
+                if (!project) return;
+                const character = (project.storyBible.characters || []).find(c => c.id === charId);
+                if (!character) return;
+                // Populate input fields
+                document.getElementById('char-detail-name').value = character.name || "";
+                document.getElementById('char-detail-role').value = character.role || "";
+                document.getElementById('char-detail-appearance').value = character.appearance || "";
+                document.getElementById('char-detail-personality').value = character.personality || "";
+                document.getElementById('char-detail-goals').value = character.goals || "";
+                document.getElementById('char-detail-flaws').value = character.flaws || "";
+                document.getElementById('char-detail-description').value = character.description || "";
+
+                currentEditingItemId = charId;
+                currentEditingListKey = "characters";
+
+                // Show character modal
+                document.getElementById('character-detail-modal').style.display = 'flex';
+            }
+
+            // Opens and populates the Worldbuilding Detail Modal for editing/creating an element.
+            function openWorldbuildingDetailModal(wbId) {
+                const project = getActiveProject();
+                if (!project) return;
+                const wbe = (project.storyBible.worldbuilding || []).find(w => w.id === wbId);
+                if (!wbe) return;
+
+                document.getElementById('world-detail-name').value = wbe.name || "";
+                document.getElementById('world-detail-type').value = wbe.type || "";
+                document.getElementById('world-detail-description').value = wbe.description || "";
+                document.getElementById('world-detail-significance').value = wbe.significance || "";
+
+                currentEditingItemId = wbId;
+                currentEditingListKey = "worldbuilding";
+                document.getElementById('worldbuilding-detail-modal').style.display = 'flex';
+            }
+
+            // Attach close handlers for both modals (resets editing vars)
+            function setupModalCloseHandlers() {
+                ['character-detail-modal', 'worldbuilding-detail-modal'].forEach(id => {
+                    const modal = document.getElementById(id);
+                    modal.querySelectorAll('[data-close-modal]').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            modal.style.display = 'none';
+                            currentEditingItemId = null;
+                            currentEditingListKey = null;
+                        });
+                    });
+                });
+            }
+            setupModalCloseHandlers();
+
+            // --- STATE MANAGEMENT ---
+            let appState = {};
+            // Track the currently editing item and its list type (used by modal logic)
+            let currentEditingItemId = null;
+            let currentEditingListKey = null;
+            const createId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+            const saveState = () => localStorage.setItem('pseudoWriteState', JSON.stringify(appState));
+            const getActiveProject = () => appState.projects.find(p => p.id === appState.activeProjectId);
+            const getActiveDocument = () => getActiveProject()?.documents.find(d => d.id === appState.activeDocumentId);
+            const getDefaultState = () => { const defaultProjectId = createId('proj'); const defaultDocId = createId('doc'); return { settings: { llm_model_name: "openai-large" }, projects: [{ id: defaultProjectId, title: "My First Project", documents: [{ id: defaultDocId, title: "Chapter 1", content: "It was a dark and stormy night..."}], storyBible: { braindump: "", genre: "", style: "", synopsis: "", characters: [
+                   {
+                       id: createId('char_elara'),
+                       name: "Elara Vane",
+                       role: "Protagonist",
+                       appearance: "Tall and lean with fiery red hair and a distinct scar over her left eye. She favors practical, dark leather attire, always carrying a well-worn satchel. Her eyes are a striking emerald green.",
+                       personality: "Headstrong, fiercely loyal to her friends, and possessing a sharp, sarcastic wit. Beneath her tough exterior, she harbors deep insecurities and a fear of failure.",
+                       goals: "To uncover the truth behind her family's disappearance and reclaim a legendary artifact lost to time.",
+                       flaws: "Impulsive, struggles with trusting new people, and can be overly stubborn, leading her into unnecessary danger.",
+                       description: "Elara Vane is a determined young woman driven by the mystery of her past. Her journey intertwines with ancient prophecies and political intrigue, forcing her to confront both external threats and her own inner demons."
+                   },
+                   {
+                       id: createId('char_kailen'),
+                       name: "Lord Kaelen",
+                       role: "Antagonist",
+                       appearance: "A gaunt figure draped in ornate, obsidian robes that seem to absorb light. His piercing, pale blue eyes hold an ancient, calculating gaze. His movements are fluid and precise.",
+                       personality: "Cunning, manipulative, and possesses an unsettling calm. He believes deeply in his own superiority and is utterly ruthless in pursuing his goals, often masking his cruelty with a veneer of politeness.",
+                       goals: "To 'purify' the world by re-shaping it to his rigid, flawless vision, even if it means widespread destruction and suffering. He seeks ultimate magical control.",
+                       flaws: "Arrogant, underestimates emotional bonds and human resilience, and his pursuit of perfection blinds him to genuine beauty and connection.",
+                       description: "Lord Kaelen is a powerful sorcerer bent on recreating the world in his image. His methods are brutal, but his conviction is absolute, believing he alone knows what is best for all existence. He commands dark ancient magic."
+                   }
+               ], worldbuilding: [
+                   {
+                       id: createId('wb_skydrift'),
+                       name: "Skydrift City",
+                       type: "Location",
+                       description: "A sprawling metropolis constructed upon gigantic, perpetually floating islands, interconnected by shimmering arcane bridges. It's known for its towering spires, vibrant markets, and a constant, gentle mist.",
+                       significance: "The central hub of the region and the primary setting for the story's initial chapters. It houses the prestigious Royal Arcane Academy and is a key target for Lord Kaelen's plans."
+                   },
+                   {
+                       id: createId('wb_aether'),
+                       name: "The Aether Flow",
+                       type: "Magic System",
+                       description: "The fundamental, invisible energy that permeates all existence, from the smallest blade of grass to the grandest celestial body. Mages channel and manipulate it through complex rituals and focused intent.",
+                       significance: "The source of all magical abilities and spells. Its purity is vital for life, but it can be corrupted or drained, leading to devastating consequences. Lord Kaelen seeks to control and corrupt the Aether for his own ends."
+                   }
+               ], outline: [] }}], activeProjectId: defaultProjectId, activeDocumentId: defaultDocId }; };
+            const loadState = () => { try { const stateJSON = localStorage.getItem('pseudoWriteState'); appState = stateJSON ? JSON.parse(stateJSON) : getDefaultState(); } catch (e) { console.error("Failed to parse state from localStorage", e); appState = getDefaultState(); } if (!appState.projects || appState.projects.length === 0) { appState = getDefaultState(); } saveState(); };
+
+            // --- API INTERACTION ---
+            async function callAI(prompt, systemMessage = "You are a helpful writing assistant.", tokens = 1000) {
+                try {
+                    const response = await fetch(API_ENDPOINT, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: appState.settings.llm_model_name,
+                            messages: [{ "role": "system", "content": systemMessage }, { "role": "user", "content": prompt }],
+                            max_tokens: tokens,
+                        })
+                    });
+                    if (!response.ok) { const errorText = await response.text(); throw new Error(`API Error: ${response.status} - ${errorText}`); }
+                    const data = await response.json();
+                    if (data.error) { throw new Error(`API Error from service: ${data.error.message}`); }
+                    if (data.choices && data.choices.length > 0 && data.choices[0].message) { return data.choices[0].message.content.trim(); } 
+                    else { throw new Error("Invalid response structure from AI API."); }
+                } catch (error) {
+                    console.error("AI Call Failed:", error);
+                    alert(`AI Call Failed: ${error.message}\n\nThis could be a network issue or a problem with the AI service. Please check your connection and try again.`);
+                    return null;
+                }
+            }
+            
+            // --- AI JSON PARSING HELPER ---
+            /**
+             * Extract JSON from AI responses, even when inside code fences or with extra formatting.
+             * Returns the parsed object, or throws with an error message.
+             * Never lets a bad parse break the app; should be wrapped in try/catch by caller.
+             */
+            /**
+             * Robustly extracts the first valid JSON object from an arbitrary AI-generated string.
+             * Handles output inside markdown code fences, with extra content before/after, or malformed responses.
+             * Strictly validates the output for the character schema: {name, role, appearance, personality, goals, flaws, description}.
+             *
+             * Usage:
+             *   const obj = parseAIJson(aiResultString);
+             *
+             * Example test cases (see below for edge coverage).
+             *
+             * Throws with a clear error on parsing or schema issues.
+             *
+             * @param {string} aiResult - The string produced by the AI.
+             * @returns {Object} Parsed JS object matching the character schema.
+             */
+            // parseAIJson implementation: robustly extracts & validates JSON from possibly messy AI output.
+            // Function implementation aligns with project docs; doc version in Project.md omits error correction and schema checks.
+            function parseAIJson(aiResult) {
+                let stripped = aiResult.trim();
+                const fenceRegex = /^```(?:json)?\s*([\s\S]+?)\s*```$/im;
+                const matchFence = stripped.match(fenceRegex);
+                if (matchFence) {
+                    stripped = matchFence[1].trim();
+                }
+                let start = -1, braceLevel = 0, i = 0, end = -1;
+                while (i < stripped.length) {
+                    if (stripped[i] === '{') {
+                        if (braceLevel === 0) start = i;
+                        braceLevel++;
+                    } else if (stripped[i] === '}') {
+                        braceLevel--;
+                        if (braceLevel === 0 && start !== -1) {
+                            end = i;
+                            break;
+                        }
+                    }
+                    i++;
+                }
+                if (start === -1 || end === -1 || end <= start) {
+                    throw new Error("Could not locate a well-formed JSON object in AI output.");
+                }
+                let jsonText = stripped.slice(start, end + 1);
+                jsonText = jsonText.replace(/,(\s*[}\]])/g, '$1'); // fix trailing commas
+                let obj;
+                try {
+                    obj = JSON.parse(jsonText);
+                } catch (err) {
+                    throw new Error("Failed to parse JSON object from AI output: " + (err.message || err));
+                }
+                // Strict schema validation for character objects
+                const requiredFields = ["name", "role", "appearance", "personality", "goals", "flaws", "description"];
+                for (const key of requiredFields) {
+                    if (!(key in obj)) {
+                        throw new Error(`Parsed character JSON is missing required field: "${key}"`);
+                    }
+                    if (typeof obj[key] !== "string") {
+                        throw new Error(`Field "${key}" in parsed object must be a string, got ${typeof obj[key]}`);
+                    }
+                }
+                return obj;
+            }
+            
+            /*
+            Example test cases for integration and manual testing:
+            
+            // 1. Simple code fence (happy path)
+            parseAIJson(`
+            \`\`\`json
+            {
+              "name": "Elara",
+              "role": "Protagonist",
+              "appearance": "...",
+              "personality": "...",
+              "goals": "...",
+              "flaws": "...",
+              "description": "..."
+            }
+            \`\`\`
+            `);
+            
+            // 2. With extra text and markdown fence
+            parseAIJson(`Here's your structured JSON:
+            
+            \`\`\`json
+            {
+              "name": "Grax",
+              "role": "Antagonist",
+              "appearance": "Tall, menacing...",
+              "personality": "Cruel.",
+              "goals": "Dominate.",
+              "flaws": "Hubris.",
+              "description": "A rival villain."
+            }
+            \`\`\`
+            Thank you!`);
+            
+            // 3. Without code fence, embedded in prose
+            parseAIJson("The AI thinks the best character is {\"name\":\"Mira\",\"role\":\"Minor\",\"appearance\":\"Blue hair.\",\"personality\":\"Cautious.\",\"goals\":\"Escape.\",\"flaws\":\"Shy.\",\"description\":\"Young thief.\"} with great motivation.");
+            
+            // 4. With malformed/trailing comma
+            parseAIJson('{\n"name":"Joe",\n"role":"Supporting",\n"appearance":"Bald",\n"personality":"Loyal",\n"goals":"Help",\n"flaws":"Timid",\n"description":"Helper",\n}');
+            
+            // 5. Error: missing fields
+            try { parseAIJson('{"name": "Ana"}'); } catch (e) { console.error(e.message); }
+            */
+
+            // --- CATEGORY CONSTANTS ---
+            const CHARACTER_CATEGORIES = [
+                'Protagonist', 'Antagonist', 'Supporting', 'Minor', 'Other'
+            ];
+            const WORLD_TYPES = [
+                'Location', 'Factions', 'Magic System', 'Technology',
+                'Species', 'Artifact', 'History', 'Event',
+                'Culture', 'Concept', 'Miscellaneous'
+            ];
+            // Normalization helpers for mapping categories/types to element IDs
+            function slugifyCategory(str) {
+                // E.g. "Magic System" => "magicsystem", "Factions" => "faction"
+                return String(str).toLowerCase().replace(/[\s]/g, '').replace(/[^a-z0-9]/g, '');
+            }
+
+            // --- UI RENDERING ---
+            const render = () => { if (!getActiveProject()) { if (appState.projects.length > 0) { appState.activeProjectId = appState.projects[0].id; } else { return; }} renderProjectSelector(); renderDocuments(); renderStoryBible(); renderEditor(); renderSettings(); };
+            const renderProjectSelector = () => { const selector = document.getElementById('project-selector'); selector.innerHTML = ''; appState.projects.forEach(p => { const option = document.createElement('option'); option.value = p.id; option.textContent = p.title; if (p.id === appState.activeProjectId) { option.selected = true; } selector.appendChild(option); }); };
+            const renderDocuments = () => { const ul = document.getElementById('document-list-ul'); ul.innerHTML = ''; const project = getActiveProject(); if (project) { project.documents.forEach(doc => { const li = document.createElement('li'); li.className = 'document-list-item'; li.dataset.id = doc.id; if (doc.id === appState.activeDocumentId) li.classList.add('active'); const titleSpan = document.createElement('span'); titleSpan.className = 'doc-title'; titleSpan.textContent = doc.title || 'Untitled'; li.appendChild(titleSpan); const deleteBtn = document.createElement('button'); deleteBtn.className = 'delete-item-btn'; deleteBtn.innerHTML = '×'; deleteBtn.setAttribute('aria-label', `Delete document ${doc.title}`); li.appendChild(deleteBtn); ul.appendChild(li); }); } };
+            const renderStoryBible = () => {
+                const project = getActiveProject();
+                if (!project) return;
+                const sb = project.storyBible;
+                document.getElementById('sb-braindump').value = sb.braindump || "";
+                document.getElementById('sb-genre').value = sb.genre || "";
+                document.getElementById('sb-style').value = sb.style || "";
+                document.getElementById('sb-synopsis').value = sb.synopsis || "";
+            
+                // Render Characters by role category
+                CHARACTER_CATEGORIES.forEach(category => {
+                    const listId = `sb-characters-${slugifyCategory(category)}`;
+                    const ul = document.getElementById(listId);
+                    if (ul) {
+                        ul.innerHTML = '';
+                        const items = (sb.characters || []).filter(c => {
+                            // Standardize comparison for edge case where role might be empty or malformed
+                            return String(c.role || '').trim().toLowerCase() === category.toLowerCase();
+                        });
+                        renderStoryBibleList(listId, items, 'name', 'characters');
+                    }
+                });
+            
+                // Render Worldbuilding by type category
+                WORLD_TYPES.forEach(type => {
+                    const listId = `sb-worldbuilding-${slugifyCategory(type)}`;
+                    const ul = document.getElementById(listId);
+                    if (ul) {
+                        ul.innerHTML = '';
+                        const items = (sb.worldbuilding || []).filter(w =>
+                            String(w.type || '').trim().toLowerCase() === type.toLowerCase()
+                        );
+                        renderStoryBibleList(listId, items, 'name', 'worldbuilding');
+                    }
+                });
+            
+                // Outline remains the same
+                renderStoryBibleList('sb-outline-list', sb.outline || [], 'content', 'outline');
+            };
+            // Accepts optional listKey for contenteditable and dataset context
+            const renderStoryBibleList = (ulId, items, contentKey, listKey = null) => {
+                const ul = document.getElementById(ulId);
+                ul.innerHTML = '';
+                (items || []).forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = 'story-bible-list-item';
+                    li.dataset.id = item.id;
+                    if (listKey) li.dataset.listKey = listKey;
+                    const span = document.createElement('span');
+                    span.className = 'editable-content';
+                    span.textContent = item[contentKey];
+                    span.setAttribute('contenteditable', listKey ? 'false' : 'true');
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'delete-item-btn';
+                    deleteBtn.innerHTML = '×';
+                    deleteBtn.setAttribute('aria-label', `Delete item`);
+                    li.appendChild(span);
+                    li.appendChild(deleteBtn);
+                    ul.appendChild(li);
+                });
+            };
+            const renderEditor = () => { const doc = getActiveDocument(); const titleInput = document.getElementById('document-title-input'); const editor = document.getElementById('main-editor'); const wordCountEl = document.getElementById('word-count'); const initialGenArea = document.getElementById('initial-generation-area'); if (doc) { titleInput.value = doc.title; editor.value = doc.content; const wordCount = doc.content.trim() === '' ? 0 : doc.content.trim().split(/\s+/).length; wordCountEl.textContent = `${wordCount} Words`; initialGenArea.style.display = doc.content.trim() === '' ? 'block' : 'none'; } else { titleInput.value = ''; editor.value = ''; wordCountEl.textContent = '0 Words'; initialGenArea.style.display = 'block'; } };
+            const renderSettings = () => { document.getElementById('model-name-input').value = appState.settings.llm_model_name; };
+
+            // --- DOM & UI HELPERS ---
+            const setLoadingState = async (button, isLoading) => { button.disabled = isLoading; if (isLoading) { button.classList.add('loading'); button.dataset.originalText = button.textContent; } else { button.classList.remove('loading'); if (button.dataset.originalText) button.textContent = button.dataset.originalText; }};
+            const getStoryBibleContextString = (options = {}) => { const { exclude = [] } = options; const project = getActiveProject(); if (!project) return ""; const sb = project.storyBible; let context = "--- STORY BIBLE CONTEXT ---\n"; if (sb.genre && !exclude.includes('genre')) context += `Genre: ${sb.genre}\n`; if (sb.style && !exclude.includes('style')) context += `Writing Style Notes: ${sb.style}\n`; if (sb.synopsis && !exclude.includes('synopsis')) context += `Synopsis: ${sb.synopsis}\n`; if (sb.characters && sb.characters.length > 0 && !exclude.includes('characters')) context += `Characters: ${sb.characters.map(c => `${c.name}: ${c.description || ''}`).join('; ')}\n`; if (sb.braindump && !exclude.includes('braindump')) context += `Braindump/Notes: ${sb.braindump}\n`; context += "---------------------------\n\n"; return context; };
+            const insertTextAtCursor = (editor, text) => { const start = editor.selectionStart; editor.value = editor.value.substring(0, start) + text + editor.value.substring(editor.selectionEnd); editor.selectionStart = editor.selectionEnd = start + text.length; editor.focus(); };
+            const replaceSelectedText = (editor, text) => { editor.setRangeText(text, editor.selectionStart, editor.selectionEnd, 'select'); editor.focus(); };
+            const addStoryBibleItem = (listKey, itemData) => {
+                const project = getActiveProject();
+                if (project) {
+                    const newItem = { id: createId(listKey.slice(0, 4)), ...itemData };
+                    if (!Array.isArray(project.storyBible[listKey])) { project.storyBible[listKey] = []; }
+                    project.storyBible[listKey].push(newItem);
+                    saveState();
+                }
+            };
+
+            // --- EVENT HANDLERS ---
+            const handleNewProject = () => { const title = prompt("Enter new project title:", "New Project"); if (title) { const newProjectId = createId('proj'); const newDocId = createId('doc'); const newProject = { id: newProjectId, title: title, documents: [{ id: newDocId, title: "Untitled", content: "" }], storyBible: { braindump: "", genre: "", style: "", synopsis: "", characters: [], worldbuilding: [], outline: [] } }; appState.projects.push(newProject); appState.activeProjectId = newProjectId; appState.activeDocumentId = newDocId; saveState(); render(); } };
+            const handleDeleteProject = () => { if (appState.projects.length <= 1) { alert("Cannot delete the only project."); return; } const project = getActiveProject(); if (confirm(`Are you sure you want to delete project: "${project.title}"? This cannot be undone.`)) { appState.projects = appState.projects.filter(p => p.id !== appState.activeProjectId); appState.activeProjectId = appState.projects[0].id; appState.activeDocumentId = appState.projects[0].documents[0].id; saveState(); render(); } };
+            const handleProjectChange = (e) => { appState.activeProjectId = e.target.value; const project = getActiveProject(); if (project && project.documents.length > 0) { appState.activeDocumentId = project.documents[0].id; } else { appState.activeDocumentId = null; } saveState(); render(); };
+            const handleNewDocument = () => { const title = prompt("Enter new document title:", "Untitled"); if (title) { const project = getActiveProject(); const newDocId = createId('doc'); const newDoc = { id: newDocId, title: title, content: "" }; project.documents.push(newDoc); appState.activeDocumentId = newDocId; saveState(); render(); } };
+            const handleDocumentSelect = (e) => { if (e.target.closest('.delete-item-btn')) { handleDeleteDocument(e); return; } const listItem = e.target.closest('.document-list-item'); if (listItem) { appState.activeDocumentId = listItem.dataset.id; saveState(); render(); } };
+            const handleDeleteDocument = (e) => { const project = getActiveProject(); const docIdToDelete = e.target.closest('.document-list-item').dataset.id; if (project.documents.length <= 1) { alert("Cannot delete the last document in a project."); return; } if (confirm("Are you sure you want to delete this document?")) { project.documents = project.documents.filter(d => d.id !== docIdToDelete); if (appState.activeDocumentId === docIdToDelete) { appState.activeDocumentId = project.documents[0].id; } saveState(); render(); } };
+            const handleEditorChange = (e) => { const doc = getActiveDocument(); if (!doc) return; if (e.target.id === 'document-title-input') { doc.title = e.target.value; const li = document.querySelector(`.document-list-item[data-id="${doc.id}"] .doc-title`); if (li) li.textContent = doc.title; } else if (e.target.id === 'main-editor') { doc.content = e.target.value; } saveState(); renderEditor(); };
+            const handleStoryBibleInputChange = (e) => { const project = getActiveProject(); if (project) { const key = e.target.id.replace('sb-', ''); project.storyBible[key] = e.target.value; saveState(); } };
+            // (REMOVED) Old direct per-item click/blur handlers for sidebar story bible character/worldbuilding lists
+            async function handleWriteAuto() { const btn = document.getElementById('write-btn'); await setLoadingState(btn, true); const editor = document.getElementById('main-editor'); const textBeforeCursor = editor.value.substring(0, editor.selectionStart); const prompt = `${getStoryBibleContextString()}You are a creative co-writer. Your task is to continue the following story. **Do not repeat any part of the provided text.** Write only the next logical paragraph or two.\n\nSTORY SO FAR:\n...${textBeforeCursor.slice(-2000)}\n\nCONTINUATION:`; const result = await callAI(prompt, "You are a creative co-writer.", 400); if (result) { insertTextAtCursor(editor, ` ${result}`); handleEditorChange({ target: editor }); } await setLoadingState(btn, false); };
+            async function handleWriteGuided() { const instruction = prompt("What should happen next?"); if (!instruction) return; const btn = document.getElementById('write-btn'); await setLoadingState(btn, true); const editor = document.getElementById('main-editor'); const textBeforeCursor = editor.value.substring(0, editor.selectionStart); const prompt = `${getStoryBibleContextString()}The user wants to guide the story. Fulfill the following instruction precisely: "${instruction}".\n\nSTORY SO FAR:\n...${textBeforeCursor.slice(-2000)}\n\nGENERATED TEXT FOR INSTRUCTION:`; const result = await callAI(prompt, "You are a creative co-writer following instructions.", 400); if (result) { insertTextAtCursor(editor, `\n\n${result}`); handleEditorChange({ target: editor }); } await setLoadingState(btn, false); };
+            async function handleWriteToneShift() { const newTone = prompt("What new tone should the story continue in? (e.g., more suspenseful, more humorous)"); if (!newTone) return; const btn = document.getElementById('write-btn'); await setLoadingState(btn, true); const editor = document.getElementById('main-editor'); const textBeforeCursor = editor.value.substring(0, editor.selectionStart); const prompt = `${getStoryBibleContextString()}You are a creative co-writer. Your task is to continue the story, but immediately adopt a **${newTone}** tone. Do not repeat the existing text.\n\nSTORY SO FAR:\n...${textBeforeCursor.slice(-2000)}\n\nCONTINUATION (in a ${newTone} tone):`; const result = await callAI(prompt, "You are a writing style editor.", 400); if (result) { insertTextAtCursor(editor, ` ${result}`); handleEditorChange({ target: editor }); } await setLoadingState(btn, false); };
+            async function handleRewrite() { const editor = document.getElementById('main-editor'); const selectedText = editor.value.substring(editor.selectionStart, editor.selectionEnd); if (!selectedText) { alert("Please select text to rewrite."); return; } const numCards = parseInt(prompt("How many alternative versions (cards) to generate?", "3"), 10); if (isNaN(numCards) || numCards < 1 || numCards > 5) { alert("Please enter a number between 1 and 5."); return; } const btn = document.getElementById('rewrite-btn'); await setLoadingState(btn, true); const prompt = `${getStoryBibleContextString()}Rewrite the following text in ${numCards} different and distinct ways. Use varied sentence structure and vocabulary. Separate each version with '---'.\n\nORIGINAL TEXT:\n${selectedText}`; const result = await callAI(prompt, "You are an expert rewriter.", (selectedText.length + 100) * numCards); if (result) { const cards = result.split('---').map(card => card.trim()).filter(Boolean); showRewriteModal(cards); } await setLoadingState(btn, false); };
+            async function handleDescribe() { const modal = document.getElementById('describe-modal'); const container = document.getElementById('describe-options'); const senses = ["Sight", "Smell", "Sound", "Touch", "Taste", "Metaphor"]; container.innerHTML = senses.map(sense => ` <label style="display: block; margin-bottom: 5px;"> <input type="checkbox" name="describe-sense" value="${sense}" checked> ${sense} </label>`).join(''); modal.style.display = 'flex'; };
+            async function executeDescribe() { document.getElementById('describe-modal').style.display = 'none'; const selectedSenses = Array.from(document.querySelectorAll('input[name="describe-sense"]:checked')).map(cb => cb.value); if (selectedSenses.length === 0) return; const editor = document.getElementById('main-editor'); const contextText = editor.value.substring(Math.max(0, editor.selectionStart - 250), editor.selectionStart); const btn = document.getElementById('describe-btn'); await setLoadingState(btn, true); const prompt = `Your task is to describe the current moment in more detail. **Do not advance the plot or introduce new actions.** Based on the text provided below, expand on the sensory details. Focus specifically on: ${selectedSenses.join(', ')}.\n\nTEXT FOR CONTEXT (THE CURRENT MOMENT):\n"${contextText}"\n\nENHANCED DESCRIPTION:`; const result = await callAI(prompt, "You are a descriptive writer.", 250); if (result) { insertTextAtCursor(editor, `\n\n${result}\n\n`); handleEditorChange({ target: editor }); } await setLoadingState(btn, false); };
+            async function handleBrainstorm() { const topic = prompt("What do you want to brainstorm? (e.g., character names, plot ideas for a heist)"); if (!topic) return; const btn = document.getElementById('brainstorm-btn'); await setLoadingState(btn, true); const prompt = `${getStoryBibleContextString()}Brainstorm a list of creative ideas for the following topic: "${topic}"`; const result = await callAI(prompt, "You are a creative idea generator.", 500); if (result) { const editor = document.getElementById('main-editor'); const brainstormSection = `\n\n--- BRAINSTORM: ${topic} ---\n${result}\n---------------------------\n\n`; insertTextAtCursor(editor, brainstormSection); handleEditorChange({ target: editor }); } await setLoadingState(btn, false); };
+            async function handleGenerateSynopsis(e) { const btn = e.target; await setLoadingState(btn, true); const context = getStoryBibleContextString({ exclude: ['synopsis'] }); const prompt = `${context}Based on the provided story context (especially the braindump, genre, and characters), write a compelling, one-paragraph story synopsis. Introduce the main character, their goal, the central conflict, and the stakes.`; const result = await callAI(prompt, "You are a master story editor.", 300); if (result) { const project = getActiveProject(); project.storyBible.synopsis = result; saveState(); renderStoryBible(); } await setLoadingState(btn, false); };
+            
+            async function handleGenerateCharacter(e) {
+                const instruction = prompt("Describe the character you want to generate (e.g., 'a grumpy space pirate with a secret love for poetry')");
+                if (!instruction) return;
+                const btn = e.target;
+                await setLoadingState(btn, true);
+                const context = getStoryBibleContextString();
+                // Task 6: Require strict JSON result in specific code fence, all fields.
+                const aiPrompt = `${context}Based on the existing story context and the user's request, generate a character profile. Reply ONLY with a JSON code block—using ALL the following property names, and nothing else. Every key is REQUIRED and must be present with a detailed value:\n\n{\n  "name": ..., "role": ..., "appearance": ..., "personality": ..., "goals": ..., "flaws": ..., "description": ...\n}\n\nDo NOT add explanations or any extra text—output only a VALID JSON object matching this schema. USER REQUEST: "${instruction}"`;
+                const result = await callAI(aiPrompt, "You are a creative character designer returning ONLY a structured JSON code block.", 300);
+                if (result) {
+                    let parsed;
+                    try {
+                        parsed = parseAIJson(result);
+                    } catch (err) {
+                        alert(err.message + "\n\nPlease try again and ensure the description is clear. If the problem persists, retry or refine your request.");
+                        await setLoadingState(btn, false);
+                        return;
+                    }
+                    // Directly add parsed object; parseAIJson ensures validity.
+                    addStoryBibleItem('characters', parsed);
+                    renderStoryBible();
+                }
+                await setLoadingState(btn, false);
+            };
+            
+            async function handleGenerateWorldbuilding(e) {
+                const instruction = prompt("Describe the worldbuilding element you want to generate (e.g., 'a magical city that floats', 'a new type of FTL drive')");
+                if (!instruction) return;
+                const btn = e.target;
+                await setLoadingState(btn, true);
+                const context = getStoryBibleContextString();
+                // Task 7: Require strict JSON result in code block with all fields.
+                const aiPrompt = `${context}Based on the existing story context and the user's request, generate a worldbuilding element. Reply ONLY with a JSON code block using the following property names and nothing else:\n\n{\n  "name": ..., "type": ..., "description": ..., "significance": ...\n}\n\nDo not add explanations; just the JSON object, properly formatted. USER REQUEST: "${instruction}"`;
+                const result = await callAI(aiPrompt, "You are an expert worldbuilder returning ONLY a structured JSON code block.", 300);
+                if (result) {
+                    let parsed;
+                    try {
+                        parsed = parseAIJson(result);
+                    } catch (err) {
+                        alert(err.message + "\n\nPlease try again and ensure the description is clear. If the problem persists, retry or refine your request.");
+                        await setLoadingState(btn, false);
+                        return;
+                    }
+                    // Fallbacks for missing fields:
+                    const newWorldbuilding = {
+                        name: parsed.name ? String(parsed.name).trim() : "Unnamed Element",
+                        type: parsed.type ? String(parsed.type).trim() : "Miscellaneous",
+                        description: parsed.description ? String(parsed.description).trim() : "",
+                        significance: parsed.significance ? String(parsed.significance).trim() : ""
+                    };
+                    addStoryBibleItem('worldbuilding', newWorldbuilding);
+                    renderStoryBible();
+                }
+                await setLoadingState(btn, false);
+            };
+
+            async function handleGenerateOutline(e) { const project = getActiveProject(); if (!project.storyBible.synopsis) { alert("Please write or generate a synopsis before generating an outline."); return; } const btn = e.target; await setLoadingState(btn, true); const context = getStoryBibleContextString({ exclude: ['outline'] }); const prompt = `${context}Based on the provided synopsis and story context, create a structured novel outline. Use a clear format, like a numbered list of key plot points or chapter summaries. Ensure it has a clear beginning, middle, and end.`; const result = await callAI(prompt, "You are a master story outliner.", 800); if (result) { project.storyBible.outline = []; const beats = result.split('\n').map(line => line.trim()).filter(Boolean); beats.forEach((content, index) => { addStoryBibleItem('outline', { content, order: index }); }); saveState(); renderStoryBible(); } await setLoadingState(btn, false); };
+            async function handleGenerateTwist() { const project = getActiveProject(); if (!project.storyBible.synopsis) { alert("Please write or generate a synopsis before generating a plot twist."); return; } const btn = document.getElementById('plugins-btn'); await setLoadingState(btn, true); const context = getStoryBibleContextString({ exclude: ['braindump'] }); const prompt = `${context}Based on the story's synopsis and outline, suggest one interesting and unexpected plot twist. The twist should feel earned but surprising. Explain the twist and its potential implications on the story.`; const result = await callAI(prompt, "You are an expert story editor specializing in plot twists.", 300); if (result) { alert(`💡 Plot Twist Idea:\n\n${result}`); } await setLoadingState(btn, false); };
+            async function handleSceneEnder() { const editor = document.getElementById('main-editor'); const lastKChars = editor.value.slice(-1000); if (lastKChars.trim().length < 50) { alert("Please write more of the scene before generating an ending."); return; } const btn = document.getElementById('plugins-btn'); await setLoadingState(btn, true); const prompt = `${getStoryBibleContextString()}Based on the end of the current scene provided below, suggest three different ways to end it. Include a cliffhanger, a quiet emotional moment, and a shocking revelation. Format them clearly.\n\nEND OF SCENE:\n...${lastKChars}`; const result = await callAI(prompt, "You are a master of pacing and scene structure.", 500); if (result) { insertTextAtCursor(editor, `\n\n--- SCENE ENDER IDEAS ---\n${result}\n--------------------------\n`); handleEditorChange({ target: editor }); } await setLoadingState(btn, false); };
+            async function handleWriteWithDialogue() { const editor = document.getElementById('main-editor'); const selectedText = editor.value.substring(editor.selectionStart, editor.selectionEnd); if (!selectedText) { alert("Please select a block of text to rewrite with more dialogue."); return; } const btn = document.getElementById('plugins-btn'); await setLoadingState(btn, true); const context = getStoryBibleContextString(); const prompt = `${context}Rewrite the following prose-heavy text to include more character dialogue and interaction. Use the character descriptions from the Story Bible to inform their voices. Make it more dynamic and engaging.\n\nORIGINAL TEXT:\n${selectedText}\n\nREWRITTEN TEXT WITH DIALOGUE:`; const result = await callAI(prompt, "You are a skilled screenwriter and dialogue writer.", selectedText.length + 400); if (result) { replaceSelectedText(editor, result); handleEditorChange({ target: editor }); } await setLoadingState(btn, false); };
+            async function handleVisualize() { const editor = document.getElementById('main-editor'); const selectedText = editor.value.substring(editor.selectionStart, editor.selectionEnd); if (!selectedText) { alert("Please select a descriptive passage to visualize."); return; } const btn = document.getElementById('plugins-btn'); await setLoadingState(btn, true); const prompt = `Act as a prompt engineer for an image generation AI (like Midjourney or DALL-E). Convert the following descriptive text into a detailed, comma-separated prompt. Focus on visual elements: subject, setting, lighting, mood, style, and composition.\n\nTEXT TO VISUALIZE:\n${selectedText}\n\nIMAGE PROMPT:`; const result = await callAI(prompt, "You are a prompt engineer for image generation models.", 200); if (result) { prompt("Copy your image generation prompt:", result); } await setLoadingState(btn, false); };
+            async function handleGenerateOpenings(e) { const btn = e.target; const project = getActiveProject(); if (!project.storyBible.synopsis) { alert("Please write or generate a synopsis before generating openings."); return; } await setLoadingState(btn, true); const context = getStoryBibleContextString(); const prompt = `${context}Based on the provided Story Bible, generate three distinct and compelling opening paragraphs for the story. Each opening should offer a different hook or perspective. Number them clearly (1., 2., 3.).`; const result = await callAI(prompt, "You are an expert at writing captivating story beginnings.", 700); if (result) { const editor = document.getElementById('main-editor'); editor.value = result; handleEditorChange({ target: editor }); } await setLoadingState(btn, false); };
+            const showRewriteModal = (cards) => { const modal = document.getElementById('rewrite-modal'); const container = document.getElementById('rewrite-cards-container'); container.innerHTML = ''; cards.forEach(cardText => { const cardDiv = document.createElement('div'); cardDiv.className = 'rewrite-card'; cardDiv.textContent = cardText; cardDiv.onclick = () => { replaceSelectedText(document.getElementById('main-editor'), cardText); handleEditorChange({ target: document.getElementById('main-editor') }); modal.style.display = 'none'; }; container.appendChild(cardDiv); }); modal.style.display = 'flex'; };
+            const handleDropdownToggle = (e) => { const dropdownContent = e.target.nextElementSibling; if (dropdownContent && dropdownContent.classList.contains('dropdown-content')) { dropdownContent.classList.toggle('show'); } };
+            
+// === AI-POWERED DETAIL FIELD REFINEMENT ===
+            /**
+             * Refines the character details with AI using full description, patching only present fields.
+             * Robust: patch-only, never clear; updates modal, state, and storybible. Handles errors and alerts user.
+             */
+            async function refineCharacterDetailsAI() {
+                const btn = document.getElementById('refine-character-ai-btn');
+                await setLoadingState(btn, true);
+                try {
+                    // Validate editing context
+                    const project = getActiveProject();
+                    if (!project || currentEditingListKey !== "characters" || !currentEditingItemId) {
+                        alert("No character selected for AI refinement.");
+                        return;
+                    }
+                    // Find character object and full description value
+                    const char = (project.storyBible.characters || []).find(c => c.id === currentEditingItemId);
+                    if (!char) {
+                        alert("Character not found for AI refinement.");
+                        return;
+                    }
+                    const fullDescription = document.getElementById('char-detail-description').value || "";
+                    if (!fullDescription.trim()) {
+                        alert("Please enter a full description before refining with AI.");
+                        return;
+                    }
+
+                    // Construct prompt following PRD Stage 4 (strict patch, JSON only, PRD schema, infer only when confident)
+                    const prompt =
+`You will restructure the following character's complete description into strictly the following JSON schema, using only the keys exactly as defined: {"name","role","appearance","personality","goals","flaws","description"}.
+INFER and populate the values for each *only* if the information is clearly present in the description or deduced with VERY HIGH confidence; otherwise, OMIT the field entirely (do NOT include extra keys or blank fields). 
+Reply with nothing except a properly-formatted JSON object (no prose, no code fences). Follow the requirements to NOT erase or clear any data not present in your output. The goal is to PATCH only the fields you confidently extract or improve—no wipes.
+
+DESCRIPTION:
+${fullDescription}
+JSON PATCH RESPONSE:`;
+
+                    // Call AI
+                    const result = await callAI(prompt, "You are an AI editor helping to extract and clarify character field structure from freeform user descriptions. NEVER blank or remove any field you did not output.", 400);
+                    if (!result) return;
+
+                    // Parse JSON with patch-friendly logic (not requiring all fields)
+                    let parsed;
+                    try {
+                        // We'll allow partial objects here—accept any subset of fields
+                        let jsonStr = result.trim();
+                        // Try to extract JSON exactly, even if not code-fenced
+                        if (jsonStr.startsWith("```")) {
+                            const match = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                            if (match) jsonStr = match[1].trim();
+                        }
+                        parsed = JSON.parse(jsonStr);
+                        if (typeof parsed !== "object" || Array.isArray(parsed) || parsed === null) throw new Error();
+                    } catch (e) {
+                        alert("Failed to parse returned JSON from AI. Output was:\n\n" + result + "\n\nCheck your network connection or try rephrasing the full description, then try again.");
+                        return;
+                    }
+
+                    // Only update fields included in AI output; never erase/blank fields
+                    const updatableFields = ["name", "role", "appearance", "personality", "goals", "flaws", "description"];
+                    let changed = false;
+                    updatableFields.forEach(key => {
+                        if (key in parsed && typeof parsed[key] === "string" && parsed[key].trim().length > 0) {
+                            char[key] = parsed[key].trim();
+                            changed = true;
+                        }
+                    });
+
+                    if (changed) {
+                        // Update modal input fields to reflect changes (safe fallback: update all fields present)
+                        const fieldIdMap = {
+                            name: 'char-detail-name',
+                            role: 'char-detail-role',
+                            appearance: 'char-detail-appearance',
+                            personality: 'char-detail-personality',
+                            goals: 'char-detail-goals',
+                            flaws: 'char-detail-flaws',
+                            description: 'char-detail-description',
+                        };
+                        updatableFields.forEach(key => {
+                            if (key in parsed && fieldIdMap[key]) {
+                                document.getElementById(fieldIdMap[key]).value = parsed[key].trim();
+                            }
+                        });
+                        // Save & update UI
+                        saveState();
+                        renderStoryBible();
+                    } else {
+                        alert("AI returned no useful or new fields to update. No changes applied.");
+                    }
+                } catch (ex) {
+                    alert("An unexpected error occurred during AI character refinement:\n\n" + (ex.message || ex));
+                } finally {
+                    await setLoadingState(btn, false);
+                }
+            }
+
+            /**
+             * Refines the worldbuilding element details with AI using description, patching only present fields.
+             * Robust: patch-only, never clear; updates modal, state, and storybible. Handles errors and alerts user.
+             */
+            async function refineWorldbuildingDetailsAI() {
+                const btn = document.getElementById('refine-world-ai-btn');
+                await setLoadingState(btn, true);
+                try {
+                    const project = getActiveProject();
+                    if (!project || currentEditingListKey !== "worldbuilding" || !currentEditingItemId) {
+                        alert("No worldbuilding element selected for AI refinement.");
+                        return;
+                    }
+                    const wbe = (project.storyBible.worldbuilding || []).find(w => w.id === currentEditingItemId);
+                    if (!wbe) {
+                        alert("Worldbuilding element not found for AI refinement.");
+                        return;
+                    }
+                    const fullDescription = document.getElementById('world-detail-description').value || "";
+                    if (!fullDescription.trim()) {
+                        alert("Please enter a description before refining with AI.");
+                        return;
+                    }
+
+                    // PRD Stage 4 prompt (patch, infer when confident, strict schema)
+                    const prompt =
+`You will analyze the following worldbuilding element's description and produce ONLY a valid JSON object containing the fields you can confidently extract or improve: {"name","type","description","significance"}.
+INFER and populate a value only when it is clearly present or can be deduced with high confidence; otherwise OMIT the field entirely (do NOT send null, blank, or extra keys).
+Return ONLY a JSON object, no prose or code fences.
+
+DESCRIPTION:
+${fullDescription}
+JSON PATCH RESPONSE:`;
+
+                    // Call AI
+                    const result = await callAI(prompt, "You are an AI worldbuilding editor returning only strict patch JSON, never blanking fields not supplied.", 400);
+                    if (!result) return;
+
+                    // Parse JSON
+                    let parsed;
+                    try {
+                        let jsonStr = result.trim();
+                        if (jsonStr.startsWith("```")) {
+                            const match = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                            if (match) jsonStr = match[1].trim();
+                        }
+                        parsed = JSON.parse(jsonStr);
+                        if (typeof parsed !== "object" || Array.isArray(parsed) || parsed === null) throw new Error();
+                    } catch (e) {
+                        alert("Failed to parse returned JSON from AI. Output was:\n\n" + result + "\n\nCheck your network connection or try rephrasing the full description, then try again.");
+                        return;
+                    }
+
+                    const updatableFields = ["name", "type", "description", "significance"];
+                    let changed = false;
+                    updatableFields.forEach(key => {
+                        if (key in parsed && typeof parsed[key] === "string" && parsed[key].trim().length > 0) {
+                            wbe[key] = parsed[key].trim();
+                            changed = true;
+                        }
+                    });
+
+                    if (changed) {
+                        // Update modal inputs
+                        const fieldIdMap = {
+                            name: 'world-detail-name',
+                            type: 'world-detail-type',
+                            description: 'world-detail-description',
+                            significance: 'world-detail-significance'
+                        };
+                        updatableFields.forEach(key => {
+                            if (key in parsed && fieldIdMap[key]) {
+                                document.getElementById(fieldIdMap[key]).value = parsed[key].trim();
+                            }
+                        });
+                        saveState();
+                        renderStoryBible();
+                    } else {
+                        alert("AI returned no useful or new fields to update. No changes applied.");
+                    }
+                } catch (ex) {
+                    alert("An unexpected error occurred during AI worldbuilding refinement:\n\n" + (ex.message || ex));
+                } finally {
+                    await setLoadingState(btn, false);
+                }
+            }
+            // --- INITIALIZATION ---
+            function setupEventListeners() {
+                // Project & Document Management
+                document.getElementById('new-project-btn').addEventListener('click', handleNewProject);
+                document.getElementById('delete-project-btn').addEventListener('click', handleDeleteProject);
+                document.getElementById('project-selector').addEventListener('change', handleProjectChange);
+                document.getElementById('new-document-btn').addEventListener('click', handleNewDocument);
+                document.getElementById('document-list-ul').addEventListener('click', handleDocumentSelect);
+    
+                // Editor & Story Bible Inputs
+                document.getElementById('document-title-input').addEventListener('input', handleEditorChange);
+                document.getElementById('main-editor').addEventListener('input', handleEditorChange);
+                ['sb-braindump', 'sb-genre', 'sb-style', 'sb-synopsis'].forEach(id => {
+                    document.getElementById(id).addEventListener('input', handleStoryBibleInputChange);
+                });
+                document.getElementById('sb-add-character-btn').addEventListener('click', () => {
+                    // Prompt for character role
+                    let role = prompt(
+                        `Which role?\nChoose one: ${CHARACTER_CATEGORIES.join(', ')}\n(If left blank, defaults to "Other")`,
+                        "Protagonist"
+                    );
+                    if (!role || !CHARACTER_CATEGORIES.includes(role)) {
+                        role = "Other";
+                    }
+                    addStoryBibleItem('characters', { name: "New Character", role: role, description: "" });
+                    renderStoryBible();
+                });
+    
+                // SINGLE delegated event handler for character/worldbuilding lists in sidebar
+                document.getElementById('story-bible').addEventListener('click', function (e) {
+                    const listItem = e.target.closest('.story-bible-list-item');
+                    if (!listItem) return;
+                    const listKey = listItem.dataset.listKey;
+                    if (listKey !== 'characters' && listKey !== 'worldbuilding') return;
+    
+                    // If delete button: prompt for confirmation
+                    if (e.target.classList.contains('delete-item-btn')) {
+                        const labelText = listItem.querySelector('.editable-content')?.textContent || '';
+                        if (confirm(`Delete ${listKey === 'characters' ? 'character' : 'worldbuilding element'} "${labelText}"? This cannot be undone.`)) {
+                            const project = getActiveProject();
+                            project.storyBible[listKey] = project.storyBible[listKey].filter(item => item.id !== listItem.dataset.id);
+                            saveState();
+                            renderStoryBible();
+                        }
+                        return;
+                    }
+    
+                    // Clicking the list item (not the button): open detail modal
+                    if (e.target.classList.contains('editable-content') || e.target === listItem) {
+                        if (listKey === 'characters')
+                            openCharacterDetailModal(listItem.dataset.id);
+                        else if (listKey === 'worldbuilding')
+                            openWorldbuildingDetailModal(listItem.dataset.id);
+                    }
+                });
+                document.getElementById('sb-add-worldbuilding-btn').addEventListener('click', () => {
+                    // Prompt for worldbuilding type
+                    let type = prompt(
+                        `What type of element?\nChoose one: ${WORLD_TYPES.join(', ')}\n(If left blank, defaults to "Miscellaneous")`,
+                        "Location"
+                    );
+                    if (!type || !WORLD_TYPES.includes(type)) {
+                        type = "Miscellaneous";
+                    }
+                    addStoryBibleItem('worldbuilding', { name: "New Element", type: type, description: "" });
+                    renderStoryBible();
+                });
+                document.getElementById('sb-add-outline-btn').addEventListener('click', () => { addStoryBibleItem('outline', { content: "New Beat", order: (getActiveProject().storyBible.outline || []).length }); renderStoryBible(); });
+                document.getElementById('sb-outline-list').addEventListener('click', (e) => handleStoryBibleListClick(e, 'outline'));
+                document.getElementById('sb-outline-list').addEventListener('blur', (e) => handleStoryBibleListBlur(e, 'outline', 'content'), true);
+
+                // AI Buttons & Features
+                document.getElementById('write-btn').addEventListener('click', handleWriteAuto); // Default action
+                document.getElementById('write-auto-btn').addEventListener('click', handleWriteAuto);
+                document.getElementById('write-guided-btn').addEventListener('click', handleWriteGuided);
+                document.getElementById('write-tone-shift-btn').addEventListener('click', handleWriteToneShift);
+                document.getElementById('rewrite-btn').addEventListener('click', handleRewrite);
+                document.getElementById('describe-btn').addEventListener('click', handleDescribe);
+                document.getElementById('brainstorm-btn').addEventListener('click', handleBrainstorm);
+                document.getElementById('generate-synopsis-btn').addEventListener('click', handleGenerateSynopsis);
+
+// === Detail Modal Save/Delete Logic ===
+
+                    function saveCharacterDetails() {
+                        const project = getActiveProject();
+                        if (!project || currentEditingListKey !== "characters" || !currentEditingItemId) return;
+                        const char = (project.storyBible.characters || []).find(c => c.id === currentEditingItemId);
+                        if (!char) return;
+                        char.name = document.getElementById('char-detail-name').value;
+                        char.role = document.getElementById('char-detail-role').value;
+                        char.appearance = document.getElementById('char-detail-appearance').value;
+                        char.personality = document.getElementById('char-detail-personality').value;
+                        char.goals = document.getElementById('char-detail-goals').value;
+                        char.flaws = document.getElementById('char-detail-flaws').value;
+                        char.description = document.getElementById('char-detail-description').value;
+                        saveState();
+                        renderStoryBible();
+                        // Close modal and reset edit vars
+                        document.getElementById('character-detail-modal').style.display = 'none';
+                        currentEditingItemId = null;
+                        currentEditingListKey = null;
+                    }
+
+                    function deleteCharacterFromModal() {
+                        const project = getActiveProject();
+                        if (!project || currentEditingListKey !== "characters" || !currentEditingItemId) return;
+                        if (!confirm("Are you sure you want to delete this character? This cannot be undone.")) return;
+                        project.storyBible.characters = (project.storyBible.characters || []).filter(c => c.id !== currentEditingItemId);
+                        saveState();
+                        renderStoryBible();
+                        document.getElementById('character-detail-modal').style.display = 'none';
+                        currentEditingItemId = null;
+                        currentEditingListKey = null;
+                    }
+
+                    function saveWorldbuildingDetails() {
+                        const project = getActiveProject();
+                        if (!project || currentEditingListKey !== "worldbuilding" || !currentEditingItemId) return;
+                        const wbe = (project.storyBible.worldbuilding || []).find(w => w.id === currentEditingItemId);
+                        if (!wbe) return;
+                        wbe.name = document.getElementById('world-detail-name').value;
+                        wbe.type = document.getElementById('world-detail-type').value;
+                        wbe.description = document.getElementById('world-detail-description').value;
+                        wbe.significance = document.getElementById('world-detail-significance').value;
+                        saveState();
+                        renderStoryBible();
+                        document.getElementById('worldbuilding-detail-modal').style.display = 'none';
+                        currentEditingItemId = null;
+                        currentEditingListKey = null;
+                    }
+
+                    function deleteWorldbuildingFromModal() {
+                        const project = getActiveProject();
+                        if (!project || currentEditingListKey !== "worldbuilding" || !currentEditingItemId) return;
+                        if (!confirm("Are you sure you want to delete this worldbuilding element? This cannot be undone.")) return;
+                        project.storyBible.worldbuilding = (project.storyBible.worldbuilding || []).filter(w => w.id !== currentEditingItemId);
+                        saveState();
+                        renderStoryBible();
+                        document.getElementById('worldbuilding-detail-modal').style.display = 'none';
+                        currentEditingItemId = null;
+                        currentEditingListKey = null;
+                    }
+
+                    // Connect modal buttons
+                    document.getElementById('save-character-detail-btn').addEventListener('click', saveCharacterDetails);
+                    document.getElementById('delete-character-detail-btn').addEventListener('click', deleteCharacterFromModal);
+                    document.getElementById('save-world-detail-btn').addEventListener('click', saveWorldbuildingDetails);
+                    document.getElementById('delete-world-detail-btn').addEventListener('click', deleteWorldbuildingFromModal);
+
+                    // Wire up AI refinement buttons for character and worldbuilding modals
+                    document.getElementById('refine-character-ai-btn').addEventListener('click', refineCharacterDetailsAI);
+                    document.getElementById('refine-worldbuilding-ai-btn').addEventListener('click', refineWorldbuildingDetailsAI);
+
+                // Use event delegation for generate buttons
+                document.getElementById('story-bible').addEventListener('click', (e) => {
+                    if (e.target.id === 'generate-character-btn') {
+                        handleGenerateCharacter(e);
+                    } else if (e.target.id === 'generate-worldbuilding-btn') {
+                        handleGenerateWorldbuilding(e);
+                    }
+                });
+
+                document.getElementById('generate-outline-btn').addEventListener('click', handleGenerateOutline);
+                document.getElementById('plugin-twist-btn').addEventListener('click', handleGenerateTwist);
+                document.getElementById('plugin-scene-ender-btn').addEventListener('click', handleSceneEnder);
+                document.getElementById('plugin-dialogue-btn').addEventListener('click', handleWriteWithDialogue);
+                document.getElementById('plugin-visualize-btn').addEventListener('click', handleVisualize);
+                document.getElementById('generate-openings-btn').addEventListener('click', handleGenerateOpenings);
+
+                // Modals & Dropdowns
+                document.querySelectorAll('.dropdown-toggle').forEach(btn => btn.addEventListener('click', handleDropdownToggle));
+                document.getElementById('settings-btn').addEventListener('click', () => document.getElementById('settings-modal').style.display = 'flex');
+                document.querySelectorAll('[data-close-modal]').forEach(btn => btn.addEventListener('click', () => btn.closest('.modal-overlay').style.display = 'none'));
+                document.getElementById('model-name-input').addEventListener('input', (e) => { appState.settings.llm_model_name = e.target.value; saveState(); });
+                document.getElementById('execute-describe-btn').addEventListener('click', executeDescribe);
+
+                // Global listener to close dropdowns when clicking outside
+                window.addEventListener('click', (e) => {
+                    if (!e.target.matches('.dropdown-toggle')) {
+                        document.querySelectorAll('.dropdown-content.show').forEach(openDropdown => {
+                            openDropdown.classList.remove('show');
+                        });
+                    }
+                });
+            }
+
+            function initializeApp() {
+                loadState();
+                render();
+                setupEventListeners();
+                console.log("PseudoWrite Initialized (Final Functional Version)");
+            }
+
+            initializeApp();
+        });
+    </script>
+</body>
+</html>
